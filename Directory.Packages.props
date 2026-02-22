@@ -1,0 +1,15 @@
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageFloatingVersionsEnabled>true</CentralPackageFloatingVersionsEnabled>
+  </PropertyGroup>
+
+  <ItemGroup Label="Test Dependencies">
+    <PackageVersion Include="TUnit" Version="*" />
+  </ItemGroup>
+
+  <ItemGroup Label="Spec Test Dependencies">
+    <PackageVersion Include="AWSSDK.S3" Version="*" />
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="*" />
+  </ItemGroup>
+</Project>
