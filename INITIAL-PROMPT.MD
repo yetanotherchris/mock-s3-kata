@@ -28,3 +28,26 @@ The following websites contain information for the requirements section:
 - [Smithy](https://smithy.io/) - Interface definition language used by AWS
 - [modern-csharp-coding-standards skill](https://skillsmp.com/skills/aaronontheweb-dotnet-skills-skills-csharp-coding-standards-skill-md)
 - [dotnet-project-structure skill](https://skillsmp.com/skills/aaronontheweb-dotnet-skills-skills-project-structure-skill-md)
+
+
+## OpenSpec format
+
+See: https://github.com/Fission-AI/OpenSpec/blob/main/docs/getting-started.md
+
+You should use OpenSpec X as a tool rather than Claude Code for the specs
+
+```
+openspec/
+├── specs/              # Source of truth (your system's behavior)
+│   └── <domain>/
+│       └── spec.md
+├── changes/            # Proposed updates (one folder per change)
+│   └── <change-name>/
+│       ├── proposal.md # The "why" and "what" - captures intent, scope, and approach
+│       ├── design.md   # The "how" - technical approach and architecture decisions
+│       ├── tasks.md    # Implementation checklist with checkboxes
+│       └── specs/      # Delta specs (what's changing)
+│           └── <domain>/
+│               └── spec.md
+└── config.yaml         # Project configuration (optional)
+```

@@ -7,8 +7,8 @@ Specs in `openspec/specs/` should be implemented in this order. Each depends on 
 | # | Spec | Status | Notes |
 |---|------|--------|-------|
 | 1 | `project-structure` | Complete | Solution, csproj files, build config |
-| 2 | `in-memory-storage` | Pending | Core data layer, must precede all handlers |
-| 3 | `error-responses` | Pending | AWS XML error format, needed by every handler |
+| 2 | `in-memory-storage` | Complete | Core data layer, must precede all handlers |
+| 3 | `error-responses` | Complete | AWS XML error format, needed by every handler |
 | 4 | `http-routing` | Pending | Request dispatch, depends on storage and error format |
 | 5 | `bucket-operations` | Pending | CreateBucket, DeleteBucket, HeadBucket, ListBuckets |
 | 6 | `object-operations` | Pending | PutObject, GetObject, HeadObject, DeleteObject, CopyObject, DeleteObjects |
