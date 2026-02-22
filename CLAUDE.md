@@ -18,6 +18,15 @@ Specs in `openspec/specs/` should be implemented in this order. Each depends on 
 | 10 | `integration-tests-rclone` | Pending | Rclone integration tests (MockS3.Tests.Rclone) |
 | 11 | `docker-and-ci` | Pending | Dockerfile and GitHub Actions workflow |
 
+## Implementation Process
+
+After implementing each spec, you SHOULD verify the changes before committing:
+
+1. Run `dotnet build mock-s3.slnx` — build must succeed with 0 errors and 0 warnings
+2. Run `dotnet test` — all tests must pass (or be skipped, e.g. rclone tests when rclone is absent)
+
+If you cannot run a build or tests, say so explicitly and ask the user to verify before merging.
+
 ## OpenSpec Format Notes
 
 - `aws-sdk-compatibility/spec.md` reads more like a design doc — it names internal classes and handler chains. It should ideally be a `design.md`. When implementing, the observable behavior contract is: in-process SDK tests must work without real AWS credentials.
