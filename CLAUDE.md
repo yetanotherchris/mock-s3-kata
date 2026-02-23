@@ -1,5 +1,7 @@
 # Mock S3 Kata
 
+> Follow `openspec/constitution.md` — it defines non-negotiable rules for this project.
+
 ## Spec Implementation Order
 
 Specs in `openspec/specs/` should be implemented in this order. Each depends on the ones above it.
@@ -9,7 +11,7 @@ Specs in `openspec/specs/` should be implemented in this order. Each depends on 
 | 1 | `project-structure` | Complete | Solution, csproj files, build config |
 | 2 | `in-memory-storage` | Complete | Core data layer, must precede all handlers |
 | 3 | `error-responses` | Complete | AWS XML error format, needed by every handler |
-| 4 | `http-routing` | Pending | Request dispatch, depends on storage and error format |
+| 4 | `http-routing` | Complete | Request dispatch, depends on storage and error format |
 | 5 | `bucket-operations` | Pending | CreateBucket, DeleteBucket, HeadBucket, ListBuckets |
 | 6 | `object-operations` | Pending | PutObject, GetObject, HeadObject, DeleteObject, CopyObject, DeleteObjects |
 | 7 | `object-listing` | Pending | ListObjectsV1, ListObjectsV2 with prefix/delimiter/pagination |
@@ -26,6 +28,26 @@ After implementing each spec, you SHOULD verify the changes before committing:
 2. Run `dotnet test` — all tests must pass (or be skipped, e.g. rclone tests when rclone is absent)
 
 If you cannot run a build or tests, say so explicitly and ask the user to verify before merging.
+
+## OpenSpec Directory Structure
+
+```
+openspec/
+├── specs/              # Source of truth (current implemented behavior)
+│   └── <domain>/
+│       └── spec.md
+├── changes/            # Proposed updates (one folder per change)
+│   └── <change-name>/
+│       ├── proposal.md # The "why" and "what"
+│       ├── design.md   # The "how" — technical approach and architecture decisions
+│       ├── tasks.md    # Implementation checklist with checkboxes
+│       └── specs/      # Delta specs (what's changing)
+│           └── <domain>/
+│               └── spec.md
+└── constitution.md     # Non-negotiable project rules
+```
+
+`specs/` holds specs for features that are **already implemented**. `changes/` holds pending work.
 
 ## OpenSpec Format Notes
 
