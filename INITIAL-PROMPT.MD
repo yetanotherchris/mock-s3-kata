@@ -18,6 +18,7 @@ The project SHALL:
 - Have a Github actions file that builds, tests and then creates a docker image stored in the Github registry.
 - Have an Integration test project that tests using the AWS SDK v4 and WebApplicationFactory<Program> for in-process hosting (no network).
 - Have an integration test project uses the rclone executable to test the mock S3 server.
+- Check LSP diagnostics after each file edit and resolve all errors and warnings before committing.
 
 ## Resources
 
