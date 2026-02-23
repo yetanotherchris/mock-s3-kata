@@ -25,6 +25,8 @@ After every change:
 
 `TreatWarningsAsErrors` is enabled globally and must remain so.
 
+LSP diagnostics must be checked after each file edit — all errors and warnings must be resolved before committing.
+
 ## Package Management
 
 - All NuGet versions use `Version="*"` (latest, via central package management)

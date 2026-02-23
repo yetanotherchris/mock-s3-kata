@@ -6,3 +6,5 @@ builder.Services.AddSingleton<InMemoryS3Storage>();
 var app = builder.Build();
 S3RequestRouter.Register(app);
 app.Run();
+
+public partial class Program { }
