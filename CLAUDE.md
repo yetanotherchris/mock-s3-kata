@@ -30,11 +30,15 @@ If you cannot run a build or tests, say so explicitly and ask the user to verify
 ```
 openspec/
 ├── specs/              # Source of truth — one spec.md per domain
-│   ├── infrastructure/
-│   ├── server/
-│   ├── storage/
-│   ├── buckets/
-│   ├── objects/
-│   └── testing/
+│   ├── infrastructure/ # Project layout, build config, Docker, CI/CD
+│   ├── server/         # Error responses, HTTP routing
+│   ├── storage/        # In-memory storage layer
+│   ├── buckets/        # Bucket operations (CreateBucket, DeleteBucket, etc.)
+│   ├── objects/        # Object operations and listing
+│   └── testing/        # SDK compatibility shims and integration tests
 └── constitution.md     # Non-negotiable project rules
 ```
+
+- **No `changes/` directory** — this is a greenfield project, not an incremental update to a live system.
+- **One `spec.md` per domain** — do not split a domain into multiple spec files.
+- **Domains, not task categories** — folder names reflect what the system *is* (`objects`), not how work was broken down (`object-operations`, `object-listing`).

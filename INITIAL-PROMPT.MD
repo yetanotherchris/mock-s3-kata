@@ -38,16 +38,19 @@ You should use OpenSpec X as a tool rather than Claude Code for the specs
 
 ```
 openspec/
-├── specs/              # Source of truth (your system's behavior)
-│   └── <domain>/
-│       └── spec.md
-├── changes/            # Proposed updates (one folder per change)
-│   └── <change-name>/
-│       ├── proposal.md # The "why" and "what" - captures intent, scope, and approach
-│       ├── design.md   # The "how" - technical approach and architecture decisions
-│       ├── tasks.md    # Implementation checklist with checkboxes
-│       └── specs/      # Delta specs (what's changing)
-│           └── <domain>/
-│               └── spec.md
-└── config.yaml         # Project configuration (optional)
+├── specs/              # Source of truth — one spec.md per domain
+│   ├── infrastructure/ # Project layout, build config, Docker, CI/CD
+│   ├── server/         # Error responses, HTTP routing
+│   ├── storage/        # In-memory storage layer
+│   ├── buckets/        # Bucket operations (CreateBucket, DeleteBucket, etc.)
+│   ├── objects/        # Object operations and listing
+│   └── testing/        # SDK compatibility shims and integration tests
+└── constitution.md     # Non-negotiable project rules
 ```
+
+### Rules for this project
+
+- **No `changes/` directory.** This is a greenfield project — there is no existing baseline to diff against. The `changes/` pattern from OpenSpec is for incremental modifications to a live system.
+- **One spec.md per domain.** Do not split a domain into multiple spec files. If a domain covers several operations (e.g. objects covers PutObject, GetObject, listing, etc.), they all belong in the same `spec.md`.
+- **Domains, not task categories.** Folder names reflect what the system *is* (`buckets`, `objects`), not how work was broken down (`bucket-operations`, `object-listing`).
+- **`constitution.md`** defines non-negotiable project rules and must not be changed without explicit agreement.
