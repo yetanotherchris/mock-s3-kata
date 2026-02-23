@@ -1,4 +1,4 @@
-# Bucket Operations Specification
+# Buckets Specification
 
 ## Purpose
 
