@@ -2,6 +2,10 @@ using MockS3.Storage;
 
 namespace MockS3.Routing;
 
+// Minimal APIs are used rather than MVC because S3 routing doesn't map cleanly to MVC conventions.
+// The same route can dispatch to different operations based on headers or query parameters:
+// PUT /{bucket}/{key} → PutObject or CopyObject depending on x-amz-copy-source header
+// GET /{bucket}       → ListObjectsV1 or ListObjectsV2 depending on list-type query parameter
 public static class S3RequestRouter
 {
     public static void Register(WebApplication app)
