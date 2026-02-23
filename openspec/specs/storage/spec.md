@@ -1,4 +1,4 @@
-# In-Memory Storage Specification
+# Storage Specification
 
 ## Purpose
 
