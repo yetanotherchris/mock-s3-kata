@@ -1,3 +1,6 @@
+using System.Text;
+using System.Xml;
+using MockS3.Errors;
 using MockS3.Storage;
 
 namespace MockS3.Routing;
@@ -31,16 +34,58 @@ public static class S3RequestRouter
     }
 
     private static IResult HandleListBuckets(InMemoryS3Storage storage)
-        => Results.StatusCode(501);
+    {
+        var buckets = storage.ListBuckets().OrderBy(b => b.Name);
+        using var ms = new MemoryStream();
+        using (var writer = XmlWriter.Create(ms, new XmlWriterSettings
+        {
+            Indent = true,
+            Encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false)
+        }))
+        {
+            writer.WriteStartDocument();
+            writer.WriteStartElement("ListAllMyBucketsResult");
+            writer.WriteStartElement("Buckets");
+            foreach (var b in buckets)
+            {
+                writer.WriteStartElement("Bucket");
+                writer.WriteElementString("Name", b.Name);
+                writer.WriteElementString("CreationDate", b.CreatedAt.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"));
+                writer.WriteEndElement();
+            }
+            writer.WriteEndElement();
+            writer.WriteEndElement();
+            writer.WriteEndDocument();
+        }
+        return Results.Content(Encoding.UTF8.GetString(ms.ToArray()), "application/xml");
+    }
 
-    private static IResult HandleCreateBucket(string bucket, InMemoryS3Storage storage)
-        => Results.StatusCode(501);
+    private static IResult HandleCreateBucket(string bucket, InMemoryS3Storage storage, HttpResponse response)
+    {
+        storage.GetOrCreateBucket(bucket);
+        response.Headers.Location = $"/{bucket}";
+        return Results.StatusCode(200);
+    }
 
     private static IResult HandleDeleteBucket(string bucket, InMemoryS3Storage storage)
-        => Results.StatusCode(501);
+    {
+        if (!storage.TryGetBucket(bucket, out var b))
+            return S3ErrorResponse.NoSuchBucket($"/{bucket}").ToResult();
+
+        if (b!.Objects.Count > 0)
+            return S3ErrorResponse.BucketNotEmpty($"/{bucket}").ToResult();
+
+        storage.DeleteBucket(bucket);
+        return Results.StatusCode(204);
+    }
 
     private static IResult HandleHeadBucket(string bucket, InMemoryS3Storage storage)
-        => Results.StatusCode(501);
+    {
+        if (!storage.TryGetBucket(bucket, out _))
+            return Results.StatusCode(404);
+
+        return Results.StatusCode(200);
+    }
 
     private static IResult HandleListObjects(HttpContext ctx, string bucket, InMemoryS3Storage storage)
         => Results.StatusCode(501);

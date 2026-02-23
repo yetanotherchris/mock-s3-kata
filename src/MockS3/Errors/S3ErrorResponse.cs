@@ -40,6 +40,9 @@ public sealed record S3ErrorResponse(
         return Encoding.UTF8.GetString(ms.ToArray());
     }
 
+    public IResult ToResult() =>
+        Results.Content(content: ToXml(), contentType: "application/xml", statusCode: StatusCode);
+
     public async Task WriteAsync(HttpResponse response, bool writeBody = true)
     {
         response.StatusCode = StatusCode;
