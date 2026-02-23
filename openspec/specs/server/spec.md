@@ -114,3 +114,24 @@ The server SHALL support path-style S3 URLs (`/{bucket}/{key}`) only. Virtual-ho
 ### Requirement: Unmatched Routes
 
 Requests that do not match any defined route SHALL receive a `405 Method Not Allowed` or `404 Not Found` response.
+
+---
+
+## Request Router Implementation
+
+### Requirement: Constructor Injection
+
+`S3RequestRouter` SHALL be a non-static class. `InMemoryS3Storage` SHALL be injected via the constructor and stored as a private field. It SHALL be registered in the DI container and resolved at startup, not per-request.
+
+### Requirement: Handler Signatures
+
+Each route handler SHALL accept:
+
+- `HttpContext` for all HTTP concerns (request headers, query string, response headers, response status)
+- Route template tokens (e.g. `string bucket`, `string key`) as typed method parameters
+
+Handlers SHALL NOT take DI services, `HttpRequest`, or `HttpResponse` as separate method parameters.
+
+### Requirement: Register Method
+
+`S3RequestRouter` SHALL expose an instance method `Register(WebApplication app)` that maps all routes. `Program.cs` SHALL resolve the router from the DI container and call `Register`.

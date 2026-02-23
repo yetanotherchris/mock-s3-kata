@@ -9,9 +9,16 @@ namespace MockS3.Routing;
 // The same route can dispatch to different operations based on headers or query parameters:
 // PUT /{bucket}/{key} → PutObject or CopyObject depending on x-amz-copy-source header
 // GET /{bucket}       → ListObjectsV1 or ListObjectsV2 depending on list-type query parameter
-public static class S3RequestRouter
+public class S3RequestRouter
 {
-    public static void Register(WebApplication app)
+    private readonly InMemoryS3Storage _storage;
+
+    public S3RequestRouter(InMemoryS3Storage storage)
+    {
+        _storage = storage;
+    }
+
+    public void Register(WebApplication app)
     {
         app.MapGet("/", HandleListBuckets);
 
@@ -33,9 +40,9 @@ public static class S3RequestRouter
         return string.IsNullOrEmpty(value) ? null : value;
     }
 
-    private static IResult HandleListBuckets(InMemoryS3Storage storage)
+    private IResult HandleListBuckets()
     {
-        var buckets = storage.ListBuckets().OrderBy(b => b.Name);
+        var buckets = _storage.ListBuckets().OrderBy(b => b.Name);
         using var ms = new MemoryStream();
         using (var writer = XmlWriter.Create(ms, new XmlWriterSettings
         {
@@ -60,37 +67,37 @@ public static class S3RequestRouter
         return Results.Content(Encoding.UTF8.GetString(ms.ToArray()), "application/xml");
     }
 
-    private static IResult HandleCreateBucket(string bucket, InMemoryS3Storage storage, HttpResponse response)
+    private IResult HandleCreateBucket(string bucket, HttpContext ctx)
     {
-        storage.GetOrCreateBucket(bucket);
-        response.Headers.Location = $"/{bucket}";
+        _storage.GetOrCreateBucket(bucket);
+        ctx.Response.Headers.Location = $"/{bucket}";
         return Results.StatusCode(200);
     }
 
-    private static IResult HandleDeleteBucket(string bucket, InMemoryS3Storage storage)
+    private IResult HandleDeleteBucket(string bucket)
     {
-        if (!storage.TryGetBucket(bucket, out var b))
+        if (!_storage.TryGetBucket(bucket, out var b))
             return S3ErrorResponse.NoSuchBucket($"/{bucket}").ToResult();
 
         if (b!.Objects.Count > 0)
             return S3ErrorResponse.BucketNotEmpty($"/{bucket}").ToResult();
 
-        storage.DeleteBucket(bucket);
+        _storage.DeleteBucket(bucket);
         return Results.StatusCode(204);
     }
 
-    private static IResult HandleHeadBucket(string bucket, InMemoryS3Storage storage)
+    private IResult HandleHeadBucket(string bucket)
     {
-        if (!storage.TryGetBucket(bucket, out _))
+        if (!_storage.TryGetBucket(bucket, out _))
             return Results.StatusCode(404);
 
         return Results.StatusCode(200);
     }
 
-    private static IResult HandleListObjects(HttpContext ctx, string bucket, InMemoryS3Storage storage)
+    private IResult HandleListObjects(HttpContext ctx, string bucket)
         => Results.StatusCode(501);
 
-    private static IResult HandlePostBucket(HttpContext ctx, string bucket, InMemoryS3Storage storage)
+    private IResult HandlePostBucket(HttpContext ctx, string bucket)
     {
         if (!ctx.Request.Query.ContainsKey("delete"))
             return Results.StatusCode(405);
@@ -98,7 +105,7 @@ public static class S3RequestRouter
         return Results.StatusCode(501);
     }
 
-    private static IResult HandlePutOrCopyObject(HttpContext ctx, string bucket, string key, InMemoryS3Storage storage)
+    private IResult HandlePutOrCopyObject(HttpContext ctx, string bucket, string key)
     {
         if (ctx.Request.Headers.ContainsKey("x-amz-copy-source"))
             return Results.StatusCode(501); // CopyObject
@@ -106,12 +113,12 @@ public static class S3RequestRouter
         return Results.StatusCode(501); // PutObject
     }
 
-    private static IResult HandleGetObject(string bucket, string key, InMemoryS3Storage storage)
+    private IResult HandleGetObject(string bucket, string key)
         => Results.StatusCode(501);
 
-    private static IResult HandleDeleteObject(string bucket, string key, InMemoryS3Storage storage)
+    private IResult HandleDeleteObject(string bucket, string key)
         => Results.StatusCode(501);
 
-    private static IResult HandleHeadObject(string bucket, string key, InMemoryS3Storage storage)
+    private IResult HandleHeadObject(string bucket, string key)
         => Results.StatusCode(501);
 }
