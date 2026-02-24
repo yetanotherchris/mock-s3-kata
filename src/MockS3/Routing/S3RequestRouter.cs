@@ -1,5 +1,6 @@
 using System.Text;
 using System.Xml;
+using System.Xml.Linq;
 using MockS3.Errors;
 using MockS3.Storage;
 
@@ -95,30 +96,266 @@ public class S3RequestRouter
     }
 
     private IResult HandleListObjects(HttpContext ctx, string bucket)
-        => Results.StatusCode(501);
+    {
+        if (!_storage.TryGetBucket(bucket, out var b))
+            return S3ErrorResponse.NoSuchBucket($"/{bucket}").ToResult();
 
-    private IResult HandlePostBucket(HttpContext ctx, string bucket)
+        var query = ctx.Request.Query;
+        var isV2 = query["list-type"] == "2";
+        var prefix = GetNonEmptyQueryParam(query, "prefix");
+        var delimiter = GetNonEmptyQueryParam(query, "delimiter");
+        var maxKeysStr = GetNonEmptyQueryParam(query, "max-keys");
+        var maxKeys = maxKeysStr is not null && int.TryParse(maxKeysStr, out var mk) ? Math.Min(mk, 1000) : 1000;
+
+        // Build unified listing: objects and common prefixes merged in sorted order
+        var seenPrefixes = new HashSet<string>();
+        var items = new List<(bool IsPrefix, string Key, S3Object? Obj)>();
+
+        foreach (var obj in b!.Objects.Values.OrderBy(o => o.Key))
+        {
+            if (prefix is not null && !obj.Key.StartsWith(prefix, StringComparison.Ordinal))
+                continue;
+
+            if (delimiter is not null)
+            {
+                var keyAfterPrefix = obj.Key[(prefix?.Length ?? 0)..];
+                var delimIdx = keyAfterPrefix.IndexOf(delimiter, StringComparison.Ordinal);
+                if (delimIdx >= 0)
+                {
+                    var commonPrefix = (prefix ?? "") + keyAfterPrefix[..(delimIdx + delimiter.Length)];
+                    if (seenPrefixes.Add(commonPrefix))
+                        items.Add((true, commonPrefix, null));
+                    continue;
+                }
+            }
+
+            items.Add((false, obj.Key, obj));
+        }
+
+        // Apply marker (V1) or continuation-token (V2)
+        string? startAfter = null;
+        if (isV2)
+        {
+            var token = GetNonEmptyQueryParam(query, "continuation-token");
+            if (token is not null)
+                startAfter = Encoding.UTF8.GetString(Convert.FromBase64String(token));
+        }
+        else
+        {
+            startAfter = GetNonEmptyQueryParam(query, "marker");
+        }
+
+        if (startAfter is not null)
+            items = items.SkipWhile(item => string.CompareOrdinal(item.Key, startAfter) <= 0).ToList();
+
+        var isTruncated = items.Count > maxKeys;
+        var pageItems = items.Take(maxKeys).ToList();
+
+        string? nextToken = null;
+        if (isTruncated)
+        {
+            var lastKey = pageItems[^1].Key;
+            nextToken = isV2
+                ? Convert.ToBase64String(Encoding.UTF8.GetBytes(lastKey))
+                : lastKey;
+        }
+
+        var pageContents = pageItems.Where(i => !i.IsPrefix).Select(i => i.Obj!).ToList();
+        var pageCommonPrefixes = pageItems.Where(i => i.IsPrefix).Select(i => i.Key).ToList();
+
+        using var ms = new MemoryStream();
+        using (var writer = XmlWriter.Create(ms, new XmlWriterSettings
+        {
+            Indent = true,
+            Encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false)
+        }))
+        {
+            writer.WriteStartDocument();
+            writer.WriteStartElement("ListBucketResult");
+            writer.WriteElementString("Name", bucket);
+            writer.WriteElementString("Prefix", prefix ?? "");
+            writer.WriteElementString("MaxKeys", maxKeys.ToString());
+            if (isV2)
+                writer.WriteElementString("KeyCount", pageItems.Count.ToString());
+            writer.WriteElementString("IsTruncated", isTruncated ? "true" : "false");
+            if (nextToken is not null)
+            {
+                if (isV2)
+                    writer.WriteElementString("NextContinuationToken", nextToken);
+                else
+                    writer.WriteElementString("NextMarker", nextToken);
+            }
+
+            foreach (var obj in pageContents)
+            {
+                writer.WriteStartElement("Contents");
+                writer.WriteElementString("Key", obj.Key);
+                writer.WriteElementString("LastModified", obj.LastModified.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"));
+                writer.WriteElementString("ETag", obj.ETag);
+                writer.WriteElementString("Size", obj.ContentLength.ToString());
+                writer.WriteEndElement();
+            }
+
+            foreach (var cp in pageCommonPrefixes)
+            {
+                writer.WriteStartElement("CommonPrefixes");
+                writer.WriteElementString("Prefix", cp);
+                writer.WriteEndElement();
+            }
+
+            writer.WriteEndElement();
+            writer.WriteEndDocument();
+        }
+
+        return Results.Content(Encoding.UTF8.GetString(ms.ToArray()), "application/xml");
+    }
+
+    private async Task<IResult> HandlePostBucket(HttpContext ctx, string bucket)
     {
         if (!ctx.Request.Query.ContainsKey("delete"))
             return Results.StatusCode(405);
 
-        return Results.StatusCode(501);
+        if (!_storage.TryGetBucket(bucket, out var b))
+            return S3ErrorResponse.NoSuchBucket($"/{bucket}").ToResult();
+
+        var bodyBytes = await ReadBodyAsync(ctx);
+        var doc = XDocument.Parse(Encoding.UTF8.GetString(bodyBytes));
+        var keys = doc.Descendants().Where(e => e.Name.LocalName == "Key").Select(e => e.Value).ToList();
+
+        foreach (var key in keys)
+            b!.Objects.TryRemove(key, out _);
+
+        using var ms = new MemoryStream();
+        using (var writer = XmlWriter.Create(ms, new XmlWriterSettings
+        {
+            Indent = true,
+            Encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false)
+        }))
+        {
+            writer.WriteStartDocument();
+            writer.WriteStartElement("DeleteResult");
+            foreach (var key in keys)
+            {
+                writer.WriteStartElement("Deleted");
+                writer.WriteElementString("Key", key);
+                writer.WriteEndElement();
+            }
+            writer.WriteEndElement();
+            writer.WriteEndDocument();
+        }
+
+        return Results.Content(Encoding.UTF8.GetString(ms.ToArray()), "application/xml");
     }
 
-    private IResult HandlePutOrCopyObject(HttpContext ctx, string bucket, string key)
+    private async Task<IResult> HandlePutOrCopyObject(HttpContext ctx, string bucket, string key)
     {
-        if (ctx.Request.Headers.ContainsKey("x-amz-copy-source"))
-            return Results.StatusCode(501); // CopyObject
+        if (ctx.Request.Headers.TryGetValue("x-amz-copy-source", out var copySource))
+            return HandleCopyObject(bucket, key, copySource.ToString());
 
-        return Results.StatusCode(501); // PutObject
+        return await HandlePutObject(ctx, bucket, key);
     }
 
-    private IResult HandleGetObject(string bucket, string key)
-        => Results.StatusCode(501);
+    private async Task<IResult> HandlePutObject(HttpContext ctx, string bucket, string key)
+    {
+        if (!_storage.TryGetBucket(bucket, out _))
+            return S3ErrorResponse.NoSuchBucket($"/{bucket}/{key}").ToResult();
+
+        var content = await ReadBodyAsync(ctx);
+        var contentType = ctx.Request.ContentType ?? "application/octet-stream";
+        var userMetadata = ExtractUserMetadata(ctx.Request.Headers);
+
+        var obj = _storage.PutObject(bucket, key, content, contentType, userMetadata);
+        ctx.Response.Headers.ETag = obj.ETag;
+        return Results.StatusCode(200);
+    }
+
+    private IResult HandleCopyObject(string destBucket, string destKey, string copySource)
+    {
+        var source = Uri.UnescapeDataString(copySource).TrimStart('/');
+        var slashIdx = source.IndexOf('/');
+        if (slashIdx < 0)
+            return S3ErrorResponse.NoSuchKey(copySource).ToResult();
+
+        var srcBucket = source[..slashIdx];
+        var srcKey = source[(slashIdx + 1)..];
+
+        if (!_storage.TryGetBucket(srcBucket, out var sb) || !sb!.Objects.TryGetValue(srcKey, out var srcObj))
+            return S3ErrorResponse.NoSuchKey($"/{srcBucket}/{srcKey}").ToResult();
+
+        if (!_storage.TryGetBucket(destBucket, out _))
+            return S3ErrorResponse.NoSuchBucket($"/{destBucket}").ToResult();
+
+        var newObj = _storage.PutObject(destBucket, destKey, srcObj.Content, srcObj.ContentType, srcObj.UserMetadata);
+
+        using var ms = new MemoryStream();
+        using (var writer = XmlWriter.Create(ms, new XmlWriterSettings
+        {
+            Indent = true,
+            Encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false)
+        }))
+        {
+            writer.WriteStartDocument();
+            writer.WriteStartElement("CopyObjectResult");
+            writer.WriteElementString("ETag", newObj.ETag);
+            writer.WriteElementString("LastModified", newObj.LastModified.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"));
+            writer.WriteEndElement();
+            writer.WriteEndDocument();
+        }
+
+        return Results.Content(Encoding.UTF8.GetString(ms.ToArray()), "application/xml");
+    }
+
+    private IResult HandleGetObject(HttpContext ctx, string bucket, string key)
+    {
+        if (!_storage.TryGetBucket(bucket, out var b))
+            return S3ErrorResponse.NoSuchBucket($"/{bucket}/{key}").ToResult();
+
+        if (!b!.Objects.TryGetValue(key, out var obj))
+            return S3ErrorResponse.NoSuchKey($"/{bucket}/{key}").ToResult();
+
+        ctx.Response.Headers.ETag = obj.ETag;
+        ctx.Response.Headers.LastModified = obj.LastModified.ToString("R");
+        foreach (var (k, v) in obj.UserMetadata)
+            ctx.Response.Headers.Append($"x-amz-meta-{k}", v);
+        return Results.Bytes(obj.Content, obj.ContentType);
+    }
 
     private IResult HandleDeleteObject(string bucket, string key)
-        => Results.StatusCode(501);
+    {
+        if (_storage.TryGetBucket(bucket, out var b))
+            b!.Objects.TryRemove(key, out _);
 
-    private IResult HandleHeadObject(string bucket, string key)
-        => Results.StatusCode(501);
+        return Results.StatusCode(204);
+    }
+
+    private IResult HandleHeadObject(HttpContext ctx, string bucket, string key)
+    {
+        if (!_storage.TryGetBucket(bucket, out var b) || !b!.Objects.TryGetValue(key, out var obj))
+            return Results.StatusCode(404);
+
+        ctx.Response.Headers.ETag = obj.ETag;
+        ctx.Response.Headers.LastModified = obj.LastModified.ToString("R");
+        ctx.Response.Headers.ContentType = obj.ContentType;
+        ctx.Response.Headers.ContentLength = obj.ContentLength;
+        return Results.StatusCode(200);
+    }
+
+    private static async Task<byte[]> ReadBodyAsync(HttpContext ctx)
+    {
+        using var ms = new MemoryStream();
+        await ctx.Request.Body.CopyToAsync(ms);
+        return ms.ToArray();
+    }
+
+    private static Dictionary<string, string> ExtractUserMetadata(IHeaderDictionary headers)
+    {
+        const string metaPrefix = "x-amz-meta-";
+        var metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var header in headers)
+        {
+            if (header.Key.StartsWith(metaPrefix, StringComparison.OrdinalIgnoreCase))
+                metadata[header.Key[metaPrefix.Length..]] = header.Value.ToString();
+        }
+        return metadata;
+    }
 }
