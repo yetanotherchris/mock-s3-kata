@@ -11,8 +11,8 @@ Specs in `openspec/specs/` are organised by domain. Implement in this order — 
 | 1 | `infrastructure` | Partial | Project structure complete; Docker/CI pending |
 | 2 | `storage` | Complete | In-memory data layer |
 | 3 | `server` | Complete | Error responses and HTTP routing |
-| 4 | `buckets` | Pending | CreateBucket, DeleteBucket, HeadBucket, ListBuckets |
-| 5 | `objects` | Pending | Object CRUD, batch delete, ListObjectsV1/V2 |
+| 4 | `buckets` | Complete | CreateBucket, DeleteBucket, HeadBucket, ListBuckets |
+| 5 | `objects` | Complete | Object CRUD, batch delete, ListObjectsV1/V2 |
 | 6 | `testing` | Pending | AWS SDK shims, SDK integration tests, rclone tests |
 | 7 | `infrastructure` (remainder) | Pending | Dockerfile and GitHub Actions |
 
