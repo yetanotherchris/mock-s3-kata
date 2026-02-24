@@ -164,13 +164,13 @@ The `RcloneFixture` SHALL start the mock S3 server using `WebApplication.CreateB
 
 **Background:** `WebApplicationFactory` uses an in-process `TestServer` which does not bind a real TCP port. Rclone requires a real network port to connect to.
 
-The server SHALL bind to `http://localhost:0` (OS-assigned random port). The actual port SHALL be read from `app.Urls` after startup.
+The server SHALL bind to `http://127.0.0.1:0` (OS-assigned random port). The actual port SHALL be read from `IServerAddressesFeature` after startup.
 
 #### Scenario: Server starts on available port
 
 - GIVEN the fixture starts the application
 - WHEN `app.StartAsync()` completes
-- THEN `app.Urls` contains the bound address including the assigned port
+- THEN the bound address (including the assigned port) is available via `IServerAddressesFeature`
 - THEN the server accepts TCP connections on that port
 
 ### Requirement: RcloneFixture
@@ -239,3 +239,61 @@ Tests SHALL cover at minimum:
 ### Requirement: Test Skip When Rclone Absent
 
 If the rclone executable is not found on PATH, tests SHALL be skipped (not failed).
+
+---
+
+## Rclone Reference Tests (Moto)
+
+### Requirement: Purpose
+
+To verify that the rclone test scenarios themselves are correct, the same scenarios SHALL also run against a known-working S3 implementation.
+
+The reference implementation is `motoserver/moto:5.1.21`, started as a Docker container.
+
+### Requirement: MotoFixture
+
+A `MotoFixture` class SHALL:
+
+- Check whether the `docker` executable is available on PATH
+- If Docker is available, start a container from `motoserver/moto:5.1.21` with a randomly assigned host port using `docker run -d -p 5000 motoserver/moto:5.1.21`
+- Read the assigned host port using `docker port {containerId} 5000`
+- Poll the container's HTTP endpoint until it accepts connections (any HTTP response — including 403 — counts as ready; connection-refused does not)
+- Expose `IsAvailable` (bool) and `BaseUrl` (string) to tests
+- On dispose, remove the container using `docker rm -f {containerId}`
+- Never throw from the constructor — if Docker is unavailable or the container fails to start, `IsAvailable` SHALL be `false`
+
+#### Scenario: Docker unavailable
+
+- GIVEN the `docker` executable is not on PATH
+- WHEN `MotoFixture` is constructed
+- THEN `IsAvailable` is `false`
+- THEN no exception is thrown
+
+#### Scenario: Moto container starts
+
+- GIVEN Docker is available and the image is present or pullable
+- WHEN `MotoFixture` is constructed
+- THEN a container is started and `IsAvailable` is `true`
+- THEN `BaseUrl` contains the bound address and port
+
+### Requirement: Test Skip When Docker or Rclone Absent
+
+If `MotoFixture.IsAvailable` is `false`, all moto reference tests SHALL be skipped (not failed).
+
+If the rclone executable is not found on PATH, tests SHALL also be skipped.
+
+### Requirement: Rclone Configuration for Moto
+
+The moto reference tests SHALL configure rclone using environment variables with a distinct remote name, using the same `provider=Other`, `path_style=true`, and fake credentials as the main rclone tests. The `endpoint` SHALL point to the moto container's `BaseUrl`.
+
+### Requirement: Bucket Creation
+
+Moto reference tests SHALL create test buckets using `rclone mkdir` rather than a raw HTTP PUT, because moto enforces the presence of authentication headers on all requests.
+
+### Requirement: Test Coverage
+
+The moto reference tests SHALL cover the same scenarios as the rclone integration tests:
+
+- Upload a file then list the bucket
+- Upload then download (round trip)
+- Upload multiple files then list all
