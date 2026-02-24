@@ -135,9 +135,10 @@ The workflow SHALL run on `ubuntu-latest` and contain the following steps in ord
 2. Set up .NET 10 SDK
 3. Restore dependencies (`dotnet restore`)
 4. Build the solution (`dotnet build --no-restore -c Release`)
-5. Run tests (`dotnet test --no-build -c Release`)
-6. Build the Docker image
-7. Push the Docker image to GitHub Container Registry (`ghcr.io`) — on push to `main` only
+5. Pull the moto image (`docker pull motoserver/moto:5.1.21`) — ensures the image is present before tests run so `MotoFixture` does not time out on a cold pull
+6. Run tests (`dotnet test --no-build -c Release`)
+7. Build the Docker image
+8. Push the Docker image to GitHub Container Registry (`ghcr.io`) — on push to `main` only
 
 ### Requirement: Docker Image Naming
 
