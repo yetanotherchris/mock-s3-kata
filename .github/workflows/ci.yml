@@ -32,7 +32,7 @@ jobs:
         run: docker pull motoserver/moto:5.1.21
 
       - name: Run tests
-        run: dotnet test --no-build -c Release
+        run: dotnet test -c Release
 
       - name: Set short SHA
         run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
