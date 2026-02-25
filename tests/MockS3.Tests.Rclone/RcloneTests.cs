@@ -28,6 +28,8 @@ public class RcloneTests(RcloneFixture fixture)
         }
     }
 
+    // Configures a remote named "mock" entirely via environment variables — no rclone config file needed.
+    // rclone supports RCLONE_CONFIG_<REMOTE>_<OPTION> as an official convention (https://rclone.org/docs/#environment-variables).
     private IReadOnlyDictionary<string, string> RcloneEnv() => new Dictionary<string, string>
     {
         ["RCLONE_CONFIG_MOCK_TYPE"] = "s3",

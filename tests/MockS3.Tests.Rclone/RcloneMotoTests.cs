@@ -34,6 +34,8 @@ public class RcloneMotoTests(MotoFixture fixture)
         if (!fixture.IsAvailable) Skip.Test("Docker unavailable or moto container failed to start");
     }
 
+    // Configures a remote named "moto" entirely via environment variables — no rclone config file needed.
+    // rclone supports RCLONE_CONFIG_<REMOTE>_<OPTION> as an official convention (https://rclone.org/docs/#environment-variables).
     private IReadOnlyDictionary<string, string> RcloneEnv() => new Dictionary<string, string>
     {
         ["RCLONE_CONFIG_MOTO_TYPE"] = "s3",
